@@ -1,0 +1,61 @@
+import telepot
+import requests
+import shutil
+import os
+from threading import Thread
+
+# Insira seu token de acesso do bot do Telegram
+TOKEN = '6531296307:AAHjgSKSmcf_ycnstERi--UljZO5M9LUKGU'
+bot = telepot.Bot(TOKEN)
+
+# Fila de downloads
+download_queue = []
+
+# Função para lidar com mensagens recebidas
+def handle(msg):
+    content_type, chat_type, chat_id = telepot.glance(msg)
+
+    if content_type == 'text':
+        comando = msg['text']
+        if comando.startswith('/baixar '):
+            if len(download_queue) == 0:
+                url = comando.split(' ')[1]
+                download_queue.append(chat_id)
+                start_download(chat_id, url)
+            else:
+                bot.sendMessage(chat_id, 'Já estamos baixando um arquivo. Aguarde.')
+        else:
+            bot.sendMessage(chat_id, 'Comando não reconhecido.')
+
+# Função para iniciar o download
+def start_download(chat_id, url):
+    response = requests.get(url, stream=True)
+    
+    if response.status_code == 200:
+        temp_filename = 'temp.mp4'
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
+
+        with open(temp_filename, 'wb') as local_file:
+            for chunk in response.iter_content(chunk_size=1024):
+                if chunk:
+                    local_file.write(chunk)
+                    downloaded += len(chunk)
+                    percent_complete = int((downloaded / total_size) * 100)
+                    bot.sendMessage(chat_id, f'Downloading... {percent_complete}%')
+
+        with open(temp_filename, 'rb') as mp4_file:
+            bot.sendDocument(chat_id, mp4_file)
+
+        os.remove(temp_filename)
+        download_queue.remove(chat_id)
+    else:
+        bot.sendMessage(chat_id, 'Erro ao fazer o download. Status code: {}'.format(response.status_code))
+        download_queue.remove(chat_id)
+
+# Iniciar o bot
+bot.message_loop(handle)
+
+# Manter o bot em execução
+while True:
+    pass
